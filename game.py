@@ -161,7 +161,7 @@ def main(stdscr):
         start_time = time.time()  # Record the start time when the game begins
 
         try:
-            count = 50
+            count = 0
             game_playing = True
             player_alive = True
             last_frame_matrix = matrix
@@ -179,22 +179,25 @@ def main(stdscr):
                 stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 'e' to play easy mode or 'h' to for hard mode")
                 stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"You have selected game mode: {game_mode}")
                 stdscr.addstr(SIZE[0] // 2 + 5, SIZE[1] // 2 - 5, f"Press 's' to start !")
-                stdscr.refresh()
+
 
                 # Wait for the player's input
                 key = stdscr.getch()
 
                 if key == ord('e'):
                     game_mode = "Easy"
-                    refresh_rate = 0.01
+                    refresh_rate = 0.1
+                    stdscr.refresh()
                 elif key == ord('h'):
                     game_mode = "Hard"
-                    refresh_rate = 0.005
+                    refresh_rate = 0.5
+                    stdscr.refresh()
                 elif key == ord('s'):
                     # Start the game
                     start_screen = False
                     game_playing = True  # Restart the game loop by breaking the inner "Game Over" loop
                     break
+                time.sleep(0.05)
 
             while game_playing:
                 # Calculate the elapsed time in seconds
@@ -217,11 +220,12 @@ def main(stdscr):
                 # Handle player movement
                 player_pos = handle_player_movement(stdscr, player_pos, SIZE)
 
-                if count == 50:
+                if count == 2:
                     # Update the Game of Life matrix
                     matrix = next_iteration(matrix, SIZE, player_pos)
                     count = 0
-                count += 1
+                else:
+                    count += 1
 
                 time.sleep(refresh_rate)  # Small delay to control the speed of the game
 
@@ -251,6 +255,7 @@ def main(stdscr):
                     start_screen = False
                     game_playing = True  # Restart the game loop by breaking the inner "Game Over" loop
                     break
+                time.sleep(0.05)
 
         except KeyboardInterrupt:
             pass  # Handle Ctrl+C gracefully
