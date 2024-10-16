@@ -26,6 +26,7 @@ def print_matrix(stdscr, matrix, player_pos):
         for j, elem in enumerate(row):
             # Draw the player character if it's the player's position, otherwise the normal cell
             if matrix[i, j] == 1 and (i, j) == player_pos:
+                row_to_print.append("X")
                 died = True
             elif (i, j) == player_pos:
                 row_to_print.append("X")
@@ -42,6 +43,36 @@ def print_matrix(stdscr, matrix, player_pos):
 
     stdscr.refresh()  # Refresh the screen
     return died
+
+
+def print_death_screen(stdscr, matrix, player_pos):
+    """ Flash the player icon to show the death """
+    for n in range(6):
+        for i, row in enumerate(matrix):
+            row_to_print = []
+            for j, elem in enumerate(row):
+                # Draw the player character if it's the player's position, otherwise the normal cell
+                if (i, j) == player_pos and n % 2 == 0:
+                    row_to_print.append("X")
+
+
+                elif (i, j) == player_pos:
+                    row_to_print.append(" ")
+
+                else:
+                    row_to_print.append("#" if elem == 1 else " ")
+            try:
+                if i == 0:
+                    stdscr.addstr(i, 0, f"{stdscr.getmaxyx()}      {player_pos}")
+                else:
+                    stdscr.addstr(i, 0, " ".join(row_to_print))  # Print each row
+            except curses.error:
+                # Handle the error when trying to print outside the screen bounds
+                break  # Exit the loop if we cannot print more rows
+
+            stdscr.refresh()  # Refresh the screen
+
+        time.sleep(0.33)
 
 
 def next_iteration(matrix, SIZE, player_pos):
@@ -114,6 +145,7 @@ def main(stdscr):
     stdscr.nodelay(True)  # Non-blocking input
     stdscr.keypad(True)  # Enable arrow key input
     stdscr.timeout(0)  # No timeout, so we can handle key presses immediately
+    start_screen = TrueA
 
     def reset_game():
         SIZE = stdscr.getmaxyx()  # Fixed grid size for now, but you can adjust this if needed
@@ -135,6 +167,34 @@ def main(stdscr):
             last_frame_matrix = matrix
             last_player_pos = player_pos
             seconds = 0
+            game_mode = "Easy"
+            refresh_rate = 0.01
+
+            while start_screen:
+
+                stdscr.clear()
+
+                # Overlay the "Game Over" message
+                stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "Welcome to THE GAME OF LIFE (conway edition)!")
+                stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 'e' to play easy mode or 'h' to for hard mode")
+                stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"You have selected game mode: {game_mode}")
+                stdscr.addstr(SIZE[0] // 2 + 5, SIZE[1] // 2 - 5, f"Press 's' to start !")
+                stdscr.refresh()
+
+                # Wait for the player's input
+                key = stdscr.getch()
+
+                if key == ord('e'):
+                    game_mode = "Easy"
+                    refresh_rate = 0.01
+                elif key == ord('h'):
+                    game_mode = "Hard"
+                    refresh_rate = 0.005
+                elif key == ord('s'):
+                    # Start the game
+                    start_screen = False
+                    game_playing = True  # Restart the game loop by breaking the inner "Game Over" loop
+                    break
 
             while game_playing:
                 # Calculate the elapsed time in seconds
@@ -145,7 +205,7 @@ def main(stdscr):
                 player_alive = not print_matrix(stdscr, matrix, player_pos)
 
                 if not player_alive:
-                    time.sleep(2)
+                    print_death_screen(stdscr, matrix, player_pos)
                     # Store the last frame and player position before breaking the loop
                     last_frame_matrix = matrix
                     last_player_pos = player_pos
@@ -163,7 +223,7 @@ def main(stdscr):
                     count = 0
                 count += 1
 
-                time.sleep(0.01)  # Small delay to control the speed of the game
+                time.sleep(refresh_rate)  # Small delay to control the speed of the game
 
             # Game over logic
             while not player_alive:
@@ -174,7 +234,7 @@ def main(stdscr):
 
                 # Overlay the "Game Over" message
                 stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "GAME OVER!")
-                stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 'r' to reset or 'q' to quit")
+                stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 'r' to reset, 's' to go back to the start screen, or 'q' to quit")
                 stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"Your score was {seconds}!")
                 stdscr.refresh()
 
@@ -183,8 +243,12 @@ def main(stdscr):
                 if key == ord('q'):
                     # Quit the game
                     return  # Exit the outer loop and end the game
+                elif key == ord('s'):
+                    start_screen = True
+                    break
                 elif key == ord('r'):
                     # Reset the game
+                    start_screen = False
                     game_playing = True  # Restart the game loop by breaking the inner "Game Over" loop
                     break
 
