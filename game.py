@@ -145,7 +145,7 @@ def main(stdscr):
     stdscr.nodelay(True)  # Non-blocking input
     stdscr.keypad(True)  # Enable arrow key input
     stdscr.timeout(0)  # No timeout, so we can handle key presses immediately
-    start_screen = TrueA
+    start_screen = True
 
     def reset_game():
         SIZE = stdscr.getmaxyx()  # Fixed grid size for now, but you can adjust this if needed
@@ -161,7 +161,7 @@ def main(stdscr):
         start_time = time.time()  # Record the start time when the game begins
 
         try:
-            count = 5
+            count = 50
             game_playing = True
             player_alive = True
             last_frame_matrix = matrix
@@ -217,7 +217,7 @@ def main(stdscr):
                 # Handle player movement
                 player_pos = handle_player_movement(stdscr, player_pos, SIZE)
 
-                if count == 5:
+                if count == 50:
                     # Update the Game of Life matrix
                     matrix = next_iteration(matrix, SIZE, player_pos)
                     count = 0
