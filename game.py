@@ -3,11 +3,19 @@ import numpy as np
 import curses  # For handling keyboard input and screen control
 import random
 import math
+from enum import Enum
+from sympy import false
 
 from bullet import Bullet
 from player import Player
 from snitch import Snitch
 
+class GameState(Enum):
+    START_SCREEN = 1
+    STORE_SCREEN = 2
+    GAME_PLAYING = 3
+    PLAYER_DEAD = 4
+    JUST_WATCHING = 5
 
 def initialize_colors():
     """Initialize custom colors and color pairs."""
@@ -192,13 +200,235 @@ def main(stdscr):
     score = 0
     total_score = 0
     game_mode = "Easy"
-    refresh_rate = 0.08
+    refresh_rate = 0.04
     coins = 0
     radius_selected = True
     cooldown_selected = False
     store_screen = False
+    game_state = GameState.START_SCREEN
     bullets = []
     player = Player([5,5], "up")
+    watch_rate = 0.01
+
+    def start_screen_update():
+        nonlocal start_screen, game_playing, game_mode, refresh_rate, store_screen, round_num, radius_selected, cooldown_selected, game_state  # Declare as nonlocal
+        stdscr.clear()
+        # Overlay the "Game Over" message
+        stdscr.addstr(SIZE[0] // 2 - 3, SIZE[1] // 2 - 5, "Welcome to THE GAME OF LIFE (conway edition)!")
+        stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "Press 'e' to play easy mode or 'h' to for hard mode")
+        stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 's' to go to store / character setup")
+        stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"You have selected game mode: {game_mode}")
+        stdscr.addstr(SIZE[0] // 2 + 5, SIZE[1] // 2 - 5, f"Press ENTER to start !")
+        # Wait for the player's input
+        key = stdscr.getch()
+
+        if key == ord('e'):
+            game_mode = "Easy"
+            refresh_rate = 0.04
+            stdscr.refresh()
+        elif key == ord('h'):
+            game_mode = "Hard"
+            refresh_rate = 0.02
+            stdscr.refresh()
+        elif key == ord('s'):
+            game_state = GameState.STORE_SCREEN
+            radius_selected, cooldown_selected = reset_store()
+        elif key == ord('j'):
+            game_state = GameState.JUST_WATCHING
+        elif key == curses.KEY_ENTER or key in [10, 13]:
+            # Start the game
+            game_state = GameState.GAME_PLAYING
+            start_time = time.time()
+            round_num = 1
+        time.sleep(0.05)
+
+    def store_screen_update():
+        nonlocal start_screen, store_screen, radius_selected, cooldown_selected, coins, game_state
+        stdscr.clear()
+        # Overlay the "Game Over" message and store options
+        stdscr.addstr(SIZE[0] // 2 - 10, SIZE[1] // 3, "Welcome to the store!")
+        stdscr.addstr(SIZE[0] // 2 - 10, int(SIZE[1] + SIZE[1] // 2), f"Coins: {coins}")
+
+        # Display the selection pointer
+        if radius_selected:
+            stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, "|")
+        else:
+            stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, " ")
+
+        if cooldown_selected:
+            stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, "|")
+        else:
+            stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, " ")
+
+        stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2), f"Radius level: {player.radius_level}")
+        stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2), f"Cooldown level: {player.cooldown_level}")
+
+        stdscr.addstr(SIZE[0] // 2 + 10, SIZE[1] // 3, "Press 'r' to return to the start screen")
+
+        # Wait for the player's input
+        key = stdscr.getch()
+
+        # Handle input for toggling between options
+        if key == curses.KEY_UP:
+            radius_selected = True
+            cooldown_selected = False
+
+        elif key == curses.KEY_DOWN:
+            radius_selected = False
+            cooldown_selected = True
+
+        elif key == curses.KEY_RIGHT:
+            if coins > 0:
+                if radius_selected:
+                    player.increase_radius()
+                else:
+                    player.decrease_cooldown()
+                coins -= 1
+
+        elif key == curses.KEY_LEFT:
+
+            if radius_selected:
+                level_before = player.radius_level
+                player.decrease_radius()
+                level_after = player.radius_level
+                if level_before != level_after:
+                    coins += 1
+            else:
+                level_before = player.cooldown_level
+                player.increase_cooldown()
+                level_after = player.cooldown_level
+                if level_before != level_after:
+                    coins += 1
+        elif key == ord("p"):
+            coins += 10
+        # Press 'r' to return to the start screen
+        if key == ord("r"):
+            game_state = GameState.START_SCREEN
+        time.sleep(0.01)
+        stdscr.refresh()
+
+    def game_playing_update():
+        nonlocal start_time, round_num, score, total_score, coins, matrix, snitch, last_hit_snitch, bullets, count, player_dead, game_playing, game_state
+        current_time = time.time()
+        seconds = int(current_time - start_time)
+        if int(current_time - start_time) > 10:
+            seconds = 0
+            round_num += 1
+            start_time = current_time
+        # Print the game matrix with player position
+        player_dead, hit_snitch = print_matrix(stdscr, matrix, player)
+        if hit_snitch:
+            if time.time() - 0.5 > last_hit_snitch:
+                score += 1
+                total_score += 1
+                if total_score % 5 == 0:
+                    coins += 1
+                snitch.reset(stdscr)
+                last_hit_snitch = time.time()
+
+        if player_dead:
+            print_death_screen(stdscr, matrix, player)
+            game_state = GameState.PLAYER_DEAD
+
+        # Display the elapsed time and score
+        stdscr.addstr(0, 0, f"  Score: {score}     Round: {round_num}        Progress: |" + seconds * "-" + (
+                    10 - seconds) * " " + '|')
+
+        # Handle player movement
+        player.move(stdscr, SIZE, bullets)
+
+        # Update the bullets
+        update_bullets(bullets, stdscr, SIZE)
+        update_bullets(bullets, stdscr, SIZE)
+
+        if count == 2:
+            # Update the Game of Life matrix
+            matrix = next_iteration(matrix, SIZE, player)
+            matrix[snitch.position[0], snitch.position[1]] = 2
+            # Place bullets in the matrix
+            for bullet in bullets:
+                # Check the neighboring cells around the bullet's position
+                bullet_x, bullet_y = bullet.position[0], bullet.position[1]
+
+                # Define neighbor positions (8 possible directions)
+                neighbors = [
+                    (bullet_x - 1, bullet_y),  # Up
+                    (bullet_x + 1, bullet_y),  # Down
+                    (bullet_x, bullet_y - 1),  # Left
+                    (bullet_x, bullet_y + 1),  # Right
+                    (bullet_x - 1, bullet_y - 1),  # Top-left
+                    (bullet_x - 1, bullet_y + 1),  # Top-right
+                    (bullet_x + 1, bullet_y - 1),  # Bottom-left
+                    (bullet_x + 1, bullet_y + 1)  # Bottom-right
+                ]
+
+                # Check if any neighbor has a `1` (dangerous cell)
+                if any(0 <= x < len(matrix) and 0 <= y < len(matrix[0]) and matrix[x][y] == 1 for x, y in
+                       neighbors):
+                    bullet.dead = True
+                    # Remove surrounding `1`s in a 10x10 area around the bullet
+                    for x in range(max(0, bullet.position[0] - bullet.radius),
+                                   min(len(matrix) - 1, bullet.position[0] + bullet.radius + 1)):
+                        for y in range(max(0, bullet.position[1] - bullet.radius),
+                                       min(len(matrix[0]) - 1, bullet.position[1] + bullet.radius + 1)):
+                            if x in [max(0, bullet.position[0] - bullet.radius),
+                                     min(len(matrix) - 1, bullet.position[0] + bullet.radius + 1) - 1] and y in [
+                                max(0, bullet.position[1] - bullet.radius),
+                                min(len(matrix[0]) - 1, bullet.position[1] + bullet.radius + 1) - 1]:
+                                matrix[x, y] = 0
+                            else:
+                                matrix[x, y] = 4
+                else:
+                    # If no neighboring `1` is found, continue placing the bullet in the matrix
+                    matrix[bullet.position[0], bullet.position[1]] = 3
+
+            count = 0
+        else:
+            count += 1
+
+        time.sleep(refresh_rate / round_num)
+
+    def player_dead_update():
+        nonlocal player_dead, score, start_screen, game_playing, store_screen, round_num, game_state
+        stdscr.clear()
+
+        # Overlay the "Game Over" message
+        stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "GAME OVER!")
+        stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5,
+                      "Press 'r' to reset, 's' to go back to the start screen, or 'q' to quit")
+        stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"Your score was {score}!")
+        stdscr.refresh()
+
+        # Wait for the player's input
+        key = stdscr.getch()
+        if key == ord('q'):
+            # Quit the game
+            stdscr.addstr(SIZE[0] // 2 - 3, SIZE[1] // 2 - 5, "q pressed")
+            return True # Exit the outer loop and end the game
+        elif key == ord('s'):
+            game_state = GameState.START_SCREEN
+        elif key == ord('r'):
+            # Reset the game
+            game_state = GameState.GAME_PLAYING
+            round_num = 1
+
+        time.sleep(0.05)
+
+    def just_watching_update():
+        nonlocal matrix, player, SIZE, game_state, watch_rate
+        player.avatar = " "
+        matrix = next_iteration(matrix, SIZE, player)
+        print_matrix(stdscr, matrix, player)
+        time.sleep(watch_rate)
+
+        key = stdscr.getch()
+
+        if key == ord('q'):
+            game_state = GameState.START_SCREEN
+        elif key == curses.KEY_LEFT:
+            watch_rate *= 2
+        elif key == curses.KEY_RIGHT:
+            watch_rate /= 2
 
     def reset_game():
         SIZE = stdscr.getmaxyx()  # Fixed grid size for now, but you can adjust this if needed
@@ -216,221 +446,22 @@ def main(stdscr):
 
     # Outer loop that allows resetting the game
     while True:
-
         SIZE, matrix, snitch, score = reset_game()
-
         start_time = time.time()  # Record the start time when the game begins
         last_hit_snitch = time.time()
         try:
-
-            while start_screen:
-
-                stdscr.clear()
-
-                # Overlay the "Game Over" message
-                stdscr.addstr(SIZE[0] // 2 - 3, SIZE[1] // 2 - 5, "Welcome to THE GAME OF LIFE (conway edition)!")
-                stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "Press 'e' to play easy mode or 'h' to for hard mode")
-                stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 's' to go to store / character setup")
-                stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"You have selected game mode: {game_mode}")
-                stdscr.addstr(SIZE[0] // 2 + 5, SIZE[1] // 2 - 5, f"Press ENTER to start !")
-
-
-                # Wait for the player's input
-                key = stdscr.getch()
-
-                if key == ord('e'):
-                    game_mode = "Easy"
-                    refresh_rate = 0.08
-                    stdscr.refresh()
-                elif key == ord('h'):
-                    game_mode = "Hard"
-                    refresh_rate = 0.02
-                    stdscr.refresh()
-                elif key == ord('s'):
-                    start_screen = False
-                    store_screen = True
-                    radius_selected, cooldown_selected = reset_store()
-                elif key == curses.KEY_ENTER or key in [10, 13]:
-                    # Start the game
-                    start_screen = False
-                    game_playing = True
-                    start_time = time.time()
-                    round_num = 1
-                    break
-                time.sleep(0.05)
-
-            while store_screen:
-                stdscr.clear()
-                # Overlay the "Game Over" message and store options
-                stdscr.addstr(SIZE[0] // 2 - 10, SIZE[1] // 3, "Welcome to the store!")
-                stdscr.addstr(SIZE[0] // 2 - 10, int(SIZE[1] + SIZE[1] // 2), f"Coins: {coins}")
-
-                # Display the selection pointer
-                if radius_selected:
-                    stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, "|")
-                else:
-                    stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, " ")
-
-                if cooldown_selected:
-                    stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, "|")
-                else:
-                    stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, " ")
-
-                stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2), f"Radius level: {player.radius_level}")
-                stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2), f"Cooldown level: {player.cooldown_level}")
-
-                stdscr.addstr(SIZE[0] // 2 + 10, SIZE[1] // 3, "Press 'r' to return to the start screen")
-
-                # Wait for the player's input
-                key = stdscr.getch()
-
-                # Handle input for toggling between options
-                if key == curses.KEY_UP:
-                    radius_selected = True
-                    cooldown_selected = False
-
-                elif key == curses.KEY_DOWN:
-                    radius_selected = False
-                    cooldown_selected = True
-
-                elif key == curses.KEY_RIGHT:
-                    if coins > 0:
-                        if radius_selected:
-                            player.increase_radius()
-                        else:
-                            player.decrease_cooldown()
-                        coins -= 1;
-
-                elif key == curses.KEY_LEFT:
-
-                    if radius_selected:
-                        level_before = player.radius_level
-                        player.decrease_radius()
-                        level_after = player.radius_level
-                        if level_before != level_after:
-                            coins += 1
-                    else:
-                        level_before = player.cooldown_level
-                        player.increase_cooldown()
-                        level_after = player.cooldown_level
-                        if level_before != level_after:
-                            coins += 1
-                elif key == ord("p"):
-                    coins += 10
-                # Press 'r' to return to the start screen
-                if key == ord("r"):
-                    start_screen = True
-                    store_screen = False
-                    break
-                time.sleep(0.01)
-                stdscr.refresh()
-
-            while game_playing:
-                # Calculate the elapsed time in seconds
-                current_time = time.time()
-                seconds = int(current_time - start_time)
-                if int(current_time - start_time) > 10:
-                    seconds = 0
-                    round_num += 1
-                    start_time = current_time
-                # Print the game matrix with player position
-                player_dead, hit_snitch = print_matrix(stdscr, matrix, player)
-                if hit_snitch:
-                    if time.time() - 0.5 > last_hit_snitch:
-                        score += 1
-                        total_score += 1
-                        if total_score % 5 == 0:
-                            coins += 1
-                        snitch.reset(stdscr)
-                        last_hit_snitch = time.time()
-
-                if player_dead:
-                    print_death_screen(stdscr, matrix, player)
+            while game_state == GameState.START_SCREEN:
+                start_screen_update()
+            while game_state == GameState.STORE_SCREEN:
+                store_screen_update()
+            while game_state == GameState.GAME_PLAYING:
+                game_playing_update()
+            while game_state == GameState.JUST_WATCHING:
+                just_watching_update()
+            while game_state == GameState.PLAYER_DEAD:
+                if player_dead_update():
                     break
 
-                # Display the elapsed time and score
-                stdscr.addstr(0, 0, f"  Score: {score}     Round: {round_num}  Progress: |" + seconds*"-" + (9-seconds)*" "+ '|')
-
-                # Handle player movement
-                player.move(stdscr, SIZE, bullets)
-
-                # Update the bullets
-                update_bullets(bullets, stdscr, SIZE)
-                update_bullets(bullets, stdscr, SIZE)
-
-                if count == 2:
-                    # Update the Game of Life matrix
-                    matrix = next_iteration(matrix, SIZE, player)
-                    matrix[snitch.position[0], snitch.position[1]] = 2
-                    # Place bullets in the matrix
-                    for bullet in bullets:
-                        # Check the neighboring cells around the bullet's position
-                        bullet_x, bullet_y = bullet.position[0], bullet.position[1]
-
-                        # Define neighbor positions (8 possible directions)
-                        neighbors = [
-                            (bullet_x - 1, bullet_y),  # Up
-                            (bullet_x + 1, bullet_y),  # Down
-                            (bullet_x, bullet_y - 1),  # Left
-                            (bullet_x, bullet_y + 1),  # Right
-                            (bullet_x - 1, bullet_y - 1),  # Top-left
-                            (bullet_x - 1, bullet_y + 1),  # Top-right
-                            (bullet_x + 1, bullet_y - 1),  # Bottom-left
-                            (bullet_x + 1, bullet_y + 1)  # Bottom-right
-                        ]
-
-                        # Check if any neighbor has a `1` (dangerous cell)
-                        if any(0 <= x < len(matrix) and 0 <= y < len(matrix[0]) and matrix[x][y] == 1 for x, y in
-                               neighbors):
-                            bullet.dead = True
-                            # Remove surrounding `1`s in a 10x10 area around the bullet
-                            for x in range(max(0, bullet.position[0] - bullet.radius),
-                                           min(len(matrix) - 1, bullet.position[0] + bullet.radius + 1)):
-                                for y in range(max(0, bullet.position[1] - bullet.radius),
-                                               min(len(matrix[0]) - 1, bullet.position[1] + bullet.radius + 1)):
-                                    if x in [max(0, bullet.position[0] - bullet.radius), min(len(matrix) - 1, bullet.position[0] + bullet.radius + 1) -1] and y in [max(0, bullet.position[1] - bullet.radius),min(len(matrix[0]) - 1, bullet.position[1] + bullet.radius + 1) -1]:
-                                        matrix[x, y] = 0
-                                    else:
-                                        matrix[x, y] = 4
-                        else:
-                            # If no neighboring `1` is found, continue placing the bullet in the matrix
-                            matrix[bullet.position[0], bullet.position[1]] = 3
-
-                    count = 0
-                else:
-                    count += 1
-
-                time.sleep(refresh_rate/round_num)
-
-            # Game over logic
-            while player_dead:
-
-                stdscr.clear()
-
-                # Overlay the "Game Over" message
-                stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "GAME OVER!")
-                stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 'r' to reset, 's' to go back to the start screen, or 'q' to quit")
-                stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"Your score was {score}!")
-                stdscr.refresh()
-
-                # Wait for the player's input
-                key = stdscr.getch()
-                if key == ord('q'):
-                    # Quit the game
-                    stdscr.addstr(SIZE[0] // 2 - 3, SIZE[1] // 2 - 5, "q pressed")
-                    return  # Exit the outer loop and end the game
-                elif key == ord('s'):
-                    start_screen = True
-                    break
-                elif key == ord('r'):
-                    # Reset the game
-                    start_screen = False
-                    game_playing = True
-                    store_screen = False
-                    round_num = 1
-                    score = 0
-                    break
-                time.sleep(0.05)
         except KeyboardInterrupt:
             return  # Handle Ctrl+C gracefully
 

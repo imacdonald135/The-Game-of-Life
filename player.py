@@ -12,7 +12,7 @@ class Player:
     def __init__(self, position, direction):
         self.position = position
         self.direction = direction
-        self.avatar = UP
+        self.avatar = " "
         self.last_fired = time.time()
         self.cooldown = 0.5
         self.radius = 2
