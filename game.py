@@ -15,7 +15,7 @@ def initialize_colors():
 
     # Custom colors
     curses.init_color(10, 800, 50, 50)  # Bright blue
-    curses.init_color(11, 250, 40, 40)  # Bright red
+    curses.init_color(11, 1000, 200, 200)  # Bright red
 
     # Define color pairs
     curses.init_pair(1, 11, curses.COLOR_BLACK)  # Custom bright red for player
