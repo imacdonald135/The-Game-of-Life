@@ -2,6 +2,7 @@ import time
 import numpy as np
 import curses  # For handling keyboard input and screen control
 import random
+import math
 
 from bullet import Bullet
 from player import Player
@@ -69,6 +70,8 @@ def print_matrix(stdscr, matrix, player):
     stdscr.refresh()  # Refresh the screen
     return died, hit_snitch
 
+
+
 def print_death_screen(stdscr, matrix, player):
     """ Flash the player icon to show the death """
 
@@ -122,23 +125,29 @@ def next_iteration(matrix, SIZE, player):
 
     if 1 == random.randint(0, 5):
         px, py = player.position[0], player.position[1]
+        min_distance = 10  # Minimum distance from the player
 
-        bad_x = True
-        bad_y = True
+        valid_position = False
 
-        while bad_y or bad_x:
-            x = random.randint(0, SIZE[0] - 10)
-            y = random.randint(0, SIZE[1] - 10)
+        while not valid_position:
+            # Random x and y for the top-left corner of the 10x10 block
+            x = random.randint(2, SIZE[0] - 12)
+            y = random.randint(2, SIZE[1] - 12)
 
-            if px in range(x - 5, x + 15):
-                x = random.randint(0, SIZE[0] - 10)
-                bad_x = False
-            if py in range(y - 5, y + 15):
-                y = random.randint(0, SIZE[1] - 10)
-                bad_y = False
+            # Calculate the center of the 10x10 block
+            block_center_x = x + 5
+            block_center_y = y + 5
 
-        for i in range(x, x + 10):
-            for j in range(y, y + 10):
+            # Compute the distance from the player to the block center
+            distance = math.sqrt((block_center_x - px) ** 2 + (block_center_y - py) ** 2)
+
+            # Check if the distance is greater than or equal to the minimum distance
+            if distance >= min_distance:
+                valid_position = True
+
+        # Create the 10x10 random block at the valid position
+        for i in range(x, min(x + 10, SIZE[0])):
+            for j in range(y, min(y + 10, SIZE[1])):
                 next_matrix[i, j] = random.randint(0, 1)
 
     return next_matrix
@@ -166,7 +175,7 @@ def main(stdscr):
     score = 0
     total_score = 0
     game_mode = "Easy"
-    refresh_rate = 0.02
+    refresh_rate = 0.04
     coins = 0
     radius_selected = True
     cooldown_selected = False
@@ -211,11 +220,11 @@ def main(stdscr):
 
                 if key == ord('e'):
                     game_mode = "Easy"
-                    refresh_rate = 0.02
+                    refresh_rate = 0.04
                     stdscr.refresh()
                 elif key == ord('h'):
                     game_mode = "Hard"
-                    refresh_rate = 0.01
+                    refresh_rate = 0.02
                     stdscr.refresh()
                 elif key == ord('s'):
                     start_screen = False
@@ -282,7 +291,8 @@ def main(stdscr):
                         level_after = player.cooldown_level
                         if level_before != level_after:
                             coins += 1
-
+                elif key == ord("p"):
+                    coins += 10
                 # Press 'r' to return to the start screen
                 if key == ord("r"):
                     start_screen = True
