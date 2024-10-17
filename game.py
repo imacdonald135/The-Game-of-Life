@@ -14,13 +14,20 @@ def initialize_colors():
     curses.start_color()  # Initialize color support
 
     # Custom colors
-    curses.init_color(10, 800, 50, 50)  # Bright blue
-    curses.init_color(11, 1000, 200, 200)  # Bright red
+    curses.init_color(10, 800, 50, 50)
+    curses.init_color(11, 500, 100, 100)
+    curses.init_color(12, 800, 800, 100)
+    curses.init_color(13, 800, 400, 100)
+    curses.init_color(14, 600, 200, 50)
+
 
     # Define color pairs
     curses.init_pair(1, 11, curses.COLOR_BLACK)  # Custom bright red for player
     curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Default green
     curses.init_pair(3, 10, curses.COLOR_BLACK)  # Custom bright blue
+    curses.init_pair(4, 12, curses.COLOR_BLACK)  # Custom bright blue
+    curses.init_pair(5, 13, curses.COLOR_BLACK)  # Custom bright blue
+    curses.init_pair(6, 14, curses.COLOR_BLACK)  # Custom bright blue
 
 
 def initlise_matrix(SIZE):
@@ -56,8 +63,17 @@ def print_matrix(stdscr, matrix, player):
                     ("#", curses.color_pair(1)) if elem == 1 else
                     ("@", curses.A_NORMAL) if elem == 2 else
                     ("o", curses.A_NORMAL) if elem == 3 else
+                    ("O", curses.A_NORMAL) if elem == 4 else
+                    (" ", curses.A_NORMAL) if elem == 5 else
+                    ("O", curses.A_NORMAL) if elem == 6 else
                     (" ", curses.A_NORMAL)
                 )
+                if matrix[i][j] == 4:
+                    matrix[i][j] = 5
+                elif matrix[i][j] == 5:
+                    matrix[i][j] = 6
+                elif matrix[i][j] == 6:
+                    matrix[i][j] = 0
 
         try:
             # Print the row, applying color only to the player's 'X'
@@ -117,7 +133,7 @@ def next_iteration(matrix, SIZE, player):
                     if n >= 0 and n < SIZE[0] and m >= 0 and m < SIZE[1] and not (i == n and j == m):
                         if matrix[n, m] == 1:
                             alive_neighbours += 1
-            if (matrix[i, j] == 1 and (alive_neighbours == 2 or alive_neighbours == 3)) or (
+            if (matrix[i, j] == 1 and (alive_neighbours == 3 or alive_neighbours == 2)) or (
                     matrix[i, j] == 0 and alive_neighbours == 3):
                 next_matrix[i, j] = 1
             else:
@@ -172,10 +188,11 @@ def main(stdscr):
     count = 0
     game_playing = False
     player_dead = False
+    round_num = 1
     score = 0
     total_score = 0
     game_mode = "Easy"
-    refresh_rate = 0.04
+    refresh_rate = 0.08
     coins = 0
     radius_selected = True
     cooldown_selected = False
@@ -192,6 +209,9 @@ def main(stdscr):
         snitch.reset(stdscr)
         matrix[snitch.position[0], snitch.position[1]] = 2
         return SIZE, matrix, snitch, 0
+
+    def reset_store():
+        return radius_selected, cooldown_selected
 
 
     # Outer loop that allows resetting the game
@@ -220,7 +240,7 @@ def main(stdscr):
 
                 if key == ord('e'):
                     game_mode = "Easy"
-                    refresh_rate = 0.04
+                    refresh_rate = 0.08
                     stdscr.refresh()
                 elif key == ord('h'):
                     game_mode = "Hard"
@@ -229,10 +249,13 @@ def main(stdscr):
                 elif key == ord('s'):
                     start_screen = False
                     store_screen = True
+                    radius_selected, cooldown_selected = reset_store()
                 elif key == curses.KEY_ENTER or key in [10, 13]:
                     # Start the game
                     start_screen = False
-                    game_playing = True  # Restart the game loop by breaking the inner "Game Over" loop
+                    game_playing = True
+                    start_time = time.time()
+                    round_num = 1
                     break
                 time.sleep(0.05)
 
@@ -265,6 +288,7 @@ def main(stdscr):
                 if key == curses.KEY_UP:
                     radius_selected = True
                     cooldown_selected = False
+
                 elif key == curses.KEY_DOWN:
                     radius_selected = False
                     cooldown_selected = True
@@ -287,7 +311,7 @@ def main(stdscr):
                             coins += 1
                     else:
                         level_before = player.cooldown_level
-                        player.increase_radius()
+                        player.increase_cooldown()
                         level_after = player.cooldown_level
                         if level_before != level_after:
                             coins += 1
@@ -304,8 +328,11 @@ def main(stdscr):
             while game_playing:
                 # Calculate the elapsed time in seconds
                 current_time = time.time()
-                seconds = int(current_time - start_time)  # Calculate elapsed seconds
-
+                seconds = int(current_time - start_time)
+                if int(current_time - start_time) > 10:
+                    seconds = 0
+                    round_num += 1
+                    start_time = current_time
                 # Print the game matrix with player position
                 player_dead, hit_snitch = print_matrix(stdscr, matrix, player)
                 if hit_snitch:
@@ -322,12 +349,13 @@ def main(stdscr):
                     break
 
                 # Display the elapsed time and score
-                stdscr.addstr(0, 0, f"Score: {score}")
+                stdscr.addstr(0, 0, f"  Score: {score}     Round: {round_num}  Progress: |" + seconds*"-" + (9-seconds)*" "+ '|')
 
                 # Handle player movement
                 player.move(stdscr, SIZE, bullets)
 
                 # Update the bullets
+                update_bullets(bullets, stdscr, SIZE)
                 update_bullets(bullets, stdscr, SIZE)
 
                 if count == 2:
@@ -360,8 +388,10 @@ def main(stdscr):
                                            min(len(matrix) - 1, bullet.position[0] + bullet.radius + 1)):
                                 for y in range(max(0, bullet.position[1] - bullet.radius),
                                                min(len(matrix[0]) - 1, bullet.position[1] + bullet.radius + 1)):
-                                    if matrix[x][y] == 1:
+                                    if x in [max(0, bullet.position[0] - bullet.radius), min(len(matrix) - 1, bullet.position[0] + bullet.radius + 1) -1] and y in [max(0, bullet.position[1] - bullet.radius),min(len(matrix[0]) - 1, bullet.position[1] + bullet.radius + 1) -1]:
                                         matrix[x, y] = 0
+                                    else:
+                                        matrix[x, y] = 4
                         else:
                             # If no neighboring `1` is found, continue placing the bullet in the matrix
                             matrix[bullet.position[0], bullet.position[1]] = 3
@@ -370,7 +400,7 @@ def main(stdscr):
                 else:
                     count += 1
 
-                time.sleep(refresh_rate)
+                time.sleep(refresh_rate/round_num)
 
             # Game over logic
             while player_dead:
@@ -397,6 +427,7 @@ def main(stdscr):
                     start_screen = False
                     game_playing = True
                     store_screen = False
+                    round_num = 1
                     score = 0
                     break
                 time.sleep(0.05)
