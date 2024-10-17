@@ -2,6 +2,22 @@ import time
 import numpy as np
 import curses  # For handling keyboard input and screen control
 import random
+from player import Player
+from snitch import Snitch
+
+
+def initialize_colors():
+    """Initialize custom colors and color pairs."""
+    curses.start_color()  # Initialize color support
+
+    # Custom colors
+    curses.init_color(10, 800, 50, 50)  # Bright blue
+    curses.init_color(11, 250, 40, 40)  # Bright red
+
+    # Define color pairs
+    curses.init_pair(1, 11, curses.COLOR_BLACK)  # Custom bright red for player
+    curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Default green
+    curses.init_pair(3, 10, curses.COLOR_BLACK)  # Custom bright blue
 
 
 def initlise_matrix(SIZE):
@@ -15,67 +31,75 @@ def initlise_matrix(SIZE):
             matrix[i, j] = random.randint(0, 1)
     return matrix
 
+def print_matrix(stdscr, matrix, player):
+    """Prints the matrix to the screen with player position marked as 'X' in red."""
+    # Start colors in curses# Example: green for other elements if needed
 
-def print_matrix(stdscr, matrix, player_pos):
-    """Prints the matrix to the screen with player position marked as 'X'."""
     # Clear the screen
     stdscr.clear()
     died = False
+    hit_snitch = matrix[player.position[0], player.position[1]] == 2
+
     for i, row in enumerate(matrix):
         row_to_print = []
         for j, elem in enumerate(row):
-            # Draw the player character if it's the player's position, otherwise the normal cell
-            if matrix[i, j] == 1 and (i, j) == player_pos:
-                row_to_print.append("X")
-                died = True
-            elif (i, j) == player_pos:
-                row_to_print.append("X")
+            # Check if it's the player's position
+            if [i, j] == player.position:
+                if matrix[i, j] == 1:  # If player is on a dangerous cell
+                    died = True
+                row_to_print.append((player.avatar, curses.color_pair(2)))# Green 'X' for player
             else:
-                row_to_print.append("#" if elem == 1 else " ")
+                row_to_print.append(
+                    ("#", curses.color_pair(1)) if elem == 1 else
+                    ("@", curses.A_NORMAL) if elem == 2 else
+                    (" ", curses.A_NORMAL)
+                )
+
         try:
-            if i == 0:
-                stdscr.addstr(i, 0, f"{stdscr.getmaxyx()}      {player_pos}")
-            else:
-                stdscr.addstr(i, 0, " ".join(row_to_print))  # Print each row
+            # Print the row, applying color only to the player's 'X'
+            for index, (char, style) in enumerate(row_to_print):
+                stdscr.addstr(i, index * 2, char, style)  # Use style for each character
         except curses.error:
             # Handle the error when trying to print outside the screen bounds
             break  # Exit the loop if we cannot print more rows
 
     stdscr.refresh()  # Refresh the screen
-    return died
+    return died, hit_snitch
 
-
-def print_death_screen(stdscr, matrix, player_pos):
+def print_death_screen(stdscr, matrix, player):
     """ Flash the player icon to show the death """
+
+
     for n in range(6):
         for i, row in enumerate(matrix):
             row_to_print = []
             for j, elem in enumerate(row):
-                # Draw the player character if it's the player's position, otherwise the normal cell
-                if (i, j) == player_pos and n % 2 == 0:
-                    row_to_print.append("X")
-
-
-                elif (i, j) == player_pos:
-                    row_to_print.append(" ")
-
+                # Flash the player icon (alternates between 'X' and ' ')
+                if [i, j] == player.position:
+                    if n % 2 == 0:  # Show the player icon ('X')
+                        row_to_print.append((player.avatar, curses.color_pair(3)))  # Use default red 'X' for player
+                    else:  # Hide the player icon (' ')
+                        row_to_print.append((" ", curses.A_NORMAL))
                 else:
-                    row_to_print.append("#" if elem == 1 else " ")
+                    # Use the same color scheme as in print_matrix
+                    if elem == 1:
+                        row_to_print.append(("#", curses.color_pair(1)))  # Default green for other elements
+                    else:
+                        row_to_print.append((" ", curses.A_NORMAL))  # Space for empty cells
+
             try:
-                if i == 0:
-                    stdscr.addstr(i, 0, f"{stdscr.getmaxyx()}      {player_pos}")
-                else:
-                    stdscr.addstr(i, 0, " ".join(row_to_print))  # Print each row
+                # Print the row, applying styles to flash player icon
+                for index, (char, style) in enumerate(row_to_print):
+                    stdscr.addstr(i, index * 2, char, style)  # Use style for each character
             except curses.error:
-                # Handle the error when trying to print outside the screen bounds
                 break  # Exit the loop if we cannot print more rows
 
-            stdscr.refresh()  # Refresh the screen
+        stdscr.refresh()  # Refresh the screen after each frame
+        time.sleep(0.33)  # Delay between frames
 
-        time.sleep(0.33)
 
 
-def next_iteration(matrix, SIZE, player_pos):
+def next_iteration(matrix, SIZE, player):
     """Computes the next state of the matrix based on the rules of Conway's Game of Life."""
     next_matrix = np.zeros(SIZE)
 
@@ -94,12 +118,12 @@ def next_iteration(matrix, SIZE, player_pos):
                 next_matrix[i, j] = 0
 
     if 1 == random.randint(0, 5):
-        px, py = player_pos
+        px, py = player.position[0], player.position[1]
 
         bad_x = True
         bad_y = True
 
-        while (bad_y or bad_x):
+        while bad_y or bad_x:
             x = random.randint(0, SIZE[0] - 10)
             y = random.randint(0, SIZE[1] - 10)
 
@@ -117,27 +141,7 @@ def next_iteration(matrix, SIZE, player_pos):
     return next_matrix
 
 
-def handle_player_movement(stdscr, player_pos, SIZE):
-    """Handles player movement based on arrow key input."""
-    key = stdscr.getch()  # Get the pressed key (non-blocking)
-
-    x, y = player_pos
-    max_x, max_y = stdscr.getmaxyx()
-    if key == curses.KEY_UP and x > 0:
-        x -= 1
-    elif key == curses.KEY_DOWN and x < SIZE[0] - 1 and x < max_x - 1:
-        x += 1
-    elif key == curses.KEY_LEFT and y > 0:
-        y -= 1
-    elif key == curses.KEY_RIGHT and y < SIZE[1] - 1 and (
-            (y < max_y // 2 and max_y % 2 == 1) or (y < max_y // 2 + 1) and max_y % 2 == 0):
-        y += 1
-
-    return (x, y)
-
-
 import time  # Import time module to track the elapsed time
-
 
 def main(stdscr):
     # Initialize the curses window
@@ -145,18 +149,22 @@ def main(stdscr):
     stdscr.nodelay(True)  # Non-blocking input
     stdscr.keypad(True)  # Enable arrow key input
     stdscr.timeout(0)  # No timeout, so we can handle key presses immediately
+    initialize_colors()
     start_screen = True
 
     def reset_game():
         SIZE = stdscr.getmaxyx()  # Fixed grid size for now, but you can adjust this if needed
         SIZE = (SIZE[0], SIZE[1] // 2)
         matrix = initlise_matrix(SIZE)
-        player_pos = (5, 5)  # Start player in the middle of the grid
-        return SIZE, matrix, player_pos
+        player = Player([5, 5], "up")
+        snitch = Snitch([10,10])
+        snitch.reset(stdscr)
+        matrix[snitch.position[0], snitch.position[1]] = 2
+        return SIZE, matrix, player, snitch
 
     # Outer loop that allows resetting the game
     while True:
-        SIZE, matrix, player_pos = reset_game()
+        SIZE, matrix, player, snitch = reset_game()
 
         start_time = time.time()  # Record the start time when the game begins
 
@@ -164,11 +172,10 @@ def main(stdscr):
             count = 0
             game_playing = True
             player_alive = True
-            last_frame_matrix = matrix
-            last_player_pos = player_pos
-            seconds = 0
+            score = 0
             game_mode = "Easy"
-            refresh_rate = 0.01
+            refresh_rate = 0.02
+
 
             while start_screen:
 
@@ -190,7 +197,7 @@ def main(stdscr):
                     stdscr.refresh()
                 elif key == ord('h'):
                     game_mode = "Hard"
-                    refresh_rate = 0.5
+                    refresh_rate = 0.05
                     stdscr.refresh()
                 elif key == ord('s'):
                     # Start the game
@@ -205,24 +212,25 @@ def main(stdscr):
                 seconds = int(current_time - start_time)  # Calculate elapsed seconds
 
                 # Print the game matrix with player position
-                player_alive = not print_matrix(stdscr, matrix, player_pos)
+                player_dead, hit_snitch = print_matrix(stdscr, matrix, player)
+                if hit_snitch:
+                    score += 1
+                    snitch.reset(stdscr)
 
-                if not player_alive:
-                    print_death_screen(stdscr, matrix, player_pos)
-                    # Store the last frame and player position before breaking the loop
-                    last_frame_matrix = matrix
-                    last_player_pos = player_pos
+                if player_dead:
+                    print_death_screen(stdscr, matrix, player)
                     break
 
                 # Display the elapsed time at the top of the screen
-                stdscr.addstr(0, 0, f"Time: {seconds} seconds")
+                stdscr.addstr(0, 0, f"Score: {score}")
 
                 # Handle player movement
-                player_pos = handle_player_movement(stdscr, player_pos, SIZE)
+                player.move(stdscr, SIZE)
 
                 if count == 2:
                     # Update the Game of Life matrix
-                    matrix = next_iteration(matrix, SIZE, player_pos)
+                    matrix = next_iteration(matrix, SIZE, player)
+                    matrix[snitch.position[0], snitch.position[1]] = 2
                     count = 0
                 else:
                     count += 1
@@ -230,16 +238,14 @@ def main(stdscr):
                 time.sleep(refresh_rate)  # Small delay to control the speed of the game
 
             # Game over logic
-            while not player_alive:
-                # Draw the last frame of the game
-                # print_matrix(stdscr, last_frame_matrix, last_player_pos)
+            while player_dead:
 
                 stdscr.clear()
 
                 # Overlay the "Game Over" message
                 stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "GAME OVER!")
                 stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 'r' to reset, 's' to go back to the start screen, or 'q' to quit")
-                stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"Your score was {seconds}!")
+                stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"Your score was {score}!")
                 stdscr.refresh()
 
                 # Wait for the player's input
@@ -254,6 +260,7 @@ def main(stdscr):
                     # Reset the game
                     start_screen = False
                     game_playing = True  # Restart the game loop by breaking the inner "Game Over" loop
+                    score = 0
                     break
                 time.sleep(0.05)
 
