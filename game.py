@@ -330,28 +330,43 @@ def main(stdscr):
         time.sleep(REFRESH_RATE)
 
     def store_screen_update():
-        nonlocal start_screen, store_screen, radius_selected, cooldown_selected, coins, game_state
+        nonlocal start_screen, store_screen, radius_selected, cooldown_selected, coins, game_state, SIZE
         stdscr.clear()
         # Overlay the "Game Over" message and store options
-        stdscr.addstr(SIZE[0] // 2 - 10, SIZE[1] // 3, "Welcome to the store!")
-        stdscr.addstr(SIZE[0] // 2 - 10, int(SIZE[1] + SIZE[1] // 2), f"Coins: {coins}")
+
+        stdscr.clear()
+        stdmaxx, stdmaxy = stdscr.getmaxyx()
+        textpad.rectangle(stdscr, stdmaxx // 2 - 3 * stdmaxx // 8, stdmaxy // 2 - stdmaxy // 4,
+                          stdmaxx // 2 + 3 * stdmaxx // 8,
+                          stdmaxy // 2 + stdmaxy // 4)
+        clear_inside_rectangle(stdscr, stdmaxx // 2 - 3 * stdmaxx // 8, stdmaxy // 2 - stdmaxy // 4,
+                               stdmaxx // 2 + 3 * stdmaxx // 8,
+                               stdmaxy // 2 + stdmaxy // 4)
+        stdscr.refresh()
+        text_window = curses.newwin(3 * stdmaxx // 4 - 10, stdmaxy // 2 - 10, stdmaxx // 2 - 3 * stdmaxx // 8 + 5,
+                                    stdmaxy // 2 - stdmaxy // 4 + 5)
+        text_window.bkgd(' ', curses.color_pair(11))
+        max_x, max_y = text_window.getmaxyx()
+        text_window.addstr(0, 0, "Welcome to the store!")
+        text_window.addstr(0, max_y - 20, f"Coins: {coins}")
 
         # Display the selection pointer
         if radius_selected:
-            stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, "|")
+            text_window.addstr(max_x // 2 - 1, 0, "|")
         else:
-            stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, " ")
+            text_window.addstr(max_x // 2 - 1, 0, " ")
 
         if cooldown_selected:
-            stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, "|")
+            text_window.addstr(max_x // 2 + 1, 0, "|")
         else:
-            stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, " ")
+            text_window.addstr(max_x // 2 + 1, 0, " ")
 
-        stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2), f"Radius level: {player.radius_level}")
-        stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2), f"Cooldown level: {player.cooldown_level}")
+        text_window.addstr(max_x // 2 - 1, 2, f"Radius level: {player.radius_level}")
+        text_window.addstr(max_x // 2 + 1, 2, f"Cooldown level: {player.cooldown_level}")
 
-        stdscr.addstr(SIZE[0] // 2 + 10, SIZE[1] // 3, "Press 'r' to return to the start screen")
+        text_window.addstr(max_x - 2, 0, "Press 'r' to return to the start screen")
 
+        text_window.refresh()
         # Wait for the player's input
         key = stdscr.getch()
 
@@ -391,7 +406,7 @@ def main(stdscr):
         # Press 'r' to return to the start screen
         if key == ord("r"):
             game_state = GameState.START_SCREEN
-        time.sleep(REFRESH_RATE)
+        time.sleep(REFRESH_RATE*2)
         stdscr.refresh()
 
     def help_page_update():
@@ -403,50 +418,29 @@ def main(stdscr):
                           SIZE[1] // 2 + SIZE[1]//4)
         clear_inside_rectangle(stdscr, SIZE[0] // 2 - 3*SIZE[0] // 8, SIZE[1] // 2 - SIZE[1]//4, SIZE[0] // 2 + 3*SIZE[0] // 8,
                           SIZE[1] // 2 + SIZE[1]//4)
-        stdscr.addstr(SIZE[0] // 2 - 3*SIZE[0] // 8 + 3, SIZE[1] // 2 - SIZE[1]//4 + 5, "Welcome to the Game of Life!", curses.color_pair(11))
-
-        # stdscr.addstr(SIZE[0] // 2 - 3*SIZE[0] // 8 + 7, SIZE[1] // 2 - SIZE[1]//4 + 5, "The Game of Life can be tricky to navigate sometimes. Real life can be too I guess", curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 11, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "In this game you will navigate your character through the trials and tribulations",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 12, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "that is Conways Game of Life.",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 12, SIZE[1] // 2 - SIZE[1] // 4 + 35,
-                      "You can use the keypad to move, the space bar to boost",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 13, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "in the direction your facing, and the WASD keys to fire your gun",
-                      curses.color_pair(11))
-
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 15, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "The game is played in 20 second rounds, with each round getting harder. You get",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 16, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "points and coins by eating @'s. In all rounds a @ is worth one coin, but it is worth",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 17, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "that round numbers worth of points. You can use the coins at the end of every round",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 18, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "to upgrade your character.",
-                      curses.color_pair(11))
-
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 20, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "Life isn't trying to harm you, but if he touches you, you will die instantly. Life",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 21, SIZE[1] // 2 - SIZE[1] // 4 + 5,
-                      "can multiply himself, and will randomly spawn throughout the game, although you will",
-                      curses.color_pair(11))
-        stdscr.addstr(SIZE[0] // 2 - 3 * SIZE[0] // 8 + 22, SIZE[1] // 2 - SIZE[1] // 4 + 5,
+        stdscr.refresh()
+        text_window = curses.newwin(3*SIZE[0]//4 - 10, SIZE[1]//2 - 10, SIZE[0] // 2 - 3*SIZE[0] // 8 + 5, SIZE[1] // 2 - SIZE[1]//4 + 5)
+        text_window.bkgd(' ', curses.color_pair(11))
+        text_window.addstr(0, 0,
+                      "Welcome to the game of life!\n\n"
+                      "In this game you will navigate your character through the trials and tribulations "
+                      "that is Conways Game of Life. You can use the keypad to move, the space bar to boost "
+                      "in the direction your facing, and the WASD keys to fire your gun\n\n"
+                      "The game is played in 20 second rounds, with each round getting harder. You get "
+                      "points and coins by eating @'s. In all rounds a @ is worth one coin, but it is worth "
+                      "that round numbers worth of points. You can use the coins at the end of every round "
+                      "to upgrade your character.\n\n"
+                      "Life isn't trying to harm you, but if he touches you, you will die instantly. Life "
+                      "can multiply himself, and will randomly spawn throughout the game, although you will "
                       "get a countdown where he is about to spawn.",
                       curses.color_pair(11))
-        stdscr.refresh()
+        text_window.refresh()
+
         key = stdscr.getch()
 
         if key == ord('r'):
             game_state = GameState.START_SCREEN
-        time.sleep(REFRESH_RATE)
+        time.sleep(REFRESH_RATE*4)
 
     def round_end_update():
         nonlocal start_screen, store_screen, radius_selected, cooldown_selected, coins, game_state, round_num, start_time
@@ -556,6 +550,7 @@ def main(stdscr):
         # Update the bullets
         update_bullets(bullets, stdscr, SIZE)
         update_bullets(bullets, stdscr, SIZE)
+        update_bullets(bullets, stdscr, SIZE)
 
         if count == 2:
             # Update the Game of Life matrix
@@ -567,16 +562,23 @@ def main(stdscr):
                 bullet_x, bullet_y = bullet.position[0], bullet.position[1]
 
                 # Define neighbor positions (8 possible directions)
-                neighbors = [
-                    (bullet_x - 1, bullet_y),  # Up
-                    (bullet_x + 1, bullet_y),  # Down
-                    (bullet_x, bullet_y - 1),  # Left
-                    (bullet_x, bullet_y + 1),  # Right
-                    (bullet_x - 1, bullet_y - 1),  # Top-left
-                    (bullet_x - 1, bullet_y + 1),  # Top-right
-                    (bullet_x + 1, bullet_y - 1),  # Bottom-left
-                    (bullet_x + 1, bullet_y + 1)  # Bottom-right
-                ]
+
+                if bullet.direction == "up" or bullet.direction == "down":
+                    neighbors = [
+                         (bullet_x - 1, bullet_y),
+                         (bullet_x + 1, bullet_y),
+                         (bullet_x - 2, bullet_y),
+                         (bullet_x - 2, bullet_y),
+                         (bullet_x, bullet_y)
+                    ]
+                else:
+                    neighbors = [
+                        (bullet_x, bullet_y - 1),
+                        (bullet_x, bullet_y + 1),
+                        (bullet_x, bullet_y - 2),
+                        (bullet_x, bullet_y + 2),
+                        (bullet_x, bullet_y)
+                    ]
 
                 # Check if any neighbor has a `1` (dangerous cell)
                 if any(0 <= x < len(matrix) and 0 <= y < len(matrix[0]) and matrix[x][y] == 1 for x, y in
