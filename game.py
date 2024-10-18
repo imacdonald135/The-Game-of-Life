@@ -268,6 +268,7 @@ def main(stdscr):
     score = 0
     total_score = 0
     refresh_rate = 0.04
+    top_bar_ticks = 0
     coins = 0
     radius_selected = True
     cooldown_selected = False
@@ -518,7 +519,7 @@ def main(stdscr):
         stdscr.refresh()
 
     def game_playing_update():
-        nonlocal start_time, round_num, score, total_score, coins, matrix, snitch, last_hit_snitch, bullets, count, player_dead, game_playing, game_state, cursor, conn, high_score
+        nonlocal start_time, round_num, score, total_score, coins, matrix, snitch, last_hit_snitch, bullets, count, player_dead, game_playing, game_state, cursor, conn, high_score, top_bar_ticks
         current_time = time.time()
         seconds = int(current_time - start_time)
         if int(current_time - start_time) > 20:
@@ -547,9 +548,13 @@ def main(stdscr):
             print_death_screen(stdscr, matrix, player)
             game_state = GameState.PLAYER_DEAD
 
+        if top_bar_ticks == 4:
         # Display the elapsed time and score
-        stdscr.addstr(0, 0, f"  Coins: {coins}     Round: {round_num}     Score: {score}        Progress: |" + seconds * "-" + (
+            stdscr.addstr(0, 0, f"  Coins: {coins}     Round: {round_num}     Score: {score}        Progress: |" + seconds * "-" + (
                     20 - seconds) * " " + '|')
+            top_bar_ticks = 0
+        else:
+            top_bar_ticks += 1
 
         # Handle player movement
         player.move(stdscr, SIZE, bullets)
