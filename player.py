@@ -9,7 +9,7 @@ LEFT = '◀'
 RIGHT = '▶'
 
 class Player:
-    def __init__(self, position, direction):
+    def __init__(self, position, direction, high_score, level):
         self.position = position
         self.direction = direction
         self.avatar = " "
@@ -20,6 +20,8 @@ class Player:
         self.radius_level = 1
         self.shotgun = False
         self.burst = False
+        self.highscore = high_score
+        self.level = level
 
     def move(self, stdscr, SIZE, bullets):
         key = stdscr.getch()  # Get the pressed key (non-blocking)

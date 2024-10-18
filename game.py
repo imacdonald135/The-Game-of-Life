@@ -3,12 +3,16 @@ import numpy as np
 import curses  # For handling keyboard input and screen control
 import random
 import math
+import sqlite3
+import os
+
 from enum import Enum
 from sympy import false
 
 from bullet import Bullet
 from player import Player
 from snitch import Snitch
+from welcometext import WelcomeText
 
 MATRIX_ITERATION_TICKS = 0
 EGG_PLACED = False
@@ -231,7 +235,38 @@ def update_bullets(bullets, stdscr, SIZE):
 
     bullets[:] = [bullet for bullet in bullets if not bullet.dead]
 
+def connect_to_database(db_name='game_data.db'):
+    # Check if the database file exists
+    db_exists = os.path.exists(db_name)
 
+    # Connect to the database (it will be created if it doesn't exist)
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+
+    # Create the player_data table if the database is newly created
+    if not db_exists:
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS player_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_name TEXT,
+            high_score INTEGER,
+            character_level INTEGER
+        )
+        ''')
+
+    # Commit changes and return the connection and cursor
+    conn.commit()
+    return conn, cursor
+
+def get_player_data(cursor):
+    cursor.execute('SELECT player_name, high_score, character_level FROM player_data LIMIT 1')
+    return cursor.fetchone()
+
+def create_new_player(cursor, player_name='Player1'):
+    cursor.execute('''
+    INSERT INTO player_data (player_name, high_score, character_level) 
+    VALUES (?, ?, ?)''', (player_name, 0, 1))  # Starting with a score of 0 and level 1
+    cursor.connection.commit()  # Commit the changes
 
 def main(stdscr):
     # Initialize the curses window
@@ -255,18 +290,38 @@ def main(stdscr):
     store_screen = False
     game_state = GameState.START_SCREEN
     bullets = []
-    player = Player([5,5], "up")
+    conn, cursor = connect_to_database()
+    player_data = get_player_data(cursor)
+    if player_data is None:
+        # No player exists, create a new one
+        create_new_player(cursor)
+        player_name = 'Player1'
+        high_score = 0
+        character_level = 1
+    else:
+        # Player exists, load the first player's data
+        player_name, high_score, character_level = player_data
+        print(f"Loaded {player_name} with High Score: {high_score} and Level: {character_level}")
+
+    # Initialize player object
+    player = Player([5, 5], "up", high_score, character_level)
     watch_rate = 0.01
+    welcometext = WelcomeText()
+
 
     def start_screen_update():
-        nonlocal start_screen, game_playing, game_mode, refresh_rate, store_screen, round_num, radius_selected, cooldown_selected, game_state, coins  # Declare as nonlocal
+        nonlocal start_screen, game_playing, game_mode, refresh_rate, store_screen, round_num, radius_selected, cooldown_selected, game_state, coins, welcometext, start_time  # Declare as nonlocal
         stdscr.clear()
         # Overlay the "Game Over" message
-        stdscr.addstr(SIZE[0] // 2 - 3, SIZE[1] // 2 - 5, "Welcome to THE GAME OF LIFE (conway edition)!")
-        stdscr.addstr(SIZE[0] // 2 - 1, SIZE[1] // 2 - 5, "Press 'e' to play easy mode or 'h' to for hard mode")
-        stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 's' to go to store / character setup")
-        stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"You have selected game mode: {game_mode}")
-        stdscr.addstr(SIZE[0] // 2 + 5, SIZE[1] // 2 - 5, f"Press ENTER to start !")
+        welcometext = WelcomeText()
+        for i in range(8):
+            stdscr.addstr(SIZE[0] // 2 - 15 + i, stdscr.getmaxyx()[1]//2 - len(welcometext.textlines[i])//2, welcometext.textlines[i])
+        stdscr.addstr(SIZE[0] // 2 - 8, stdscr.getmaxyx()[1]//2 + 2*len(welcometext.textlines[0])//7 , "conway edition")
+        stdscr.addstr(2 * SIZE[0] // 3 - 1, stdscr.getmaxyx()[1] // 6,f"Your high score is {high_score}")
+        stdscr.addstr(2*SIZE[0] // 3 + 1, stdscr.getmaxyx()[1]//6, "Press 'e' to play easy mode or 'h' to for hard mode")
+        stdscr.addstr(2*SIZE[0] // 3 + 3, stdscr.getmaxyx()[1]//6, "Press 's' to go to store / character setup")
+        stdscr.addstr(2*SIZE[0] // 3 + 5, stdscr.getmaxyx()[1]//6, f"You have selected game mode: {game_mode}")
+        stdscr.addstr(2*SIZE[0] // 3 + 7, stdscr.getmaxyx()[1]//6, f"Press ENTER to start !")
 
         coins = 0
         player.radius_level = 1
@@ -429,7 +484,7 @@ def main(stdscr):
         stdscr.refresh()
 
     def game_playing_update():
-        nonlocal start_time, round_num, score, total_score, coins, matrix, snitch, last_hit_snitch, bullets, count, player_dead, game_playing, game_state
+        nonlocal start_time, round_num, score, total_score, coins, matrix, snitch, last_hit_snitch, bullets, count, player_dead, game_playing, game_state, cursor, conn, high_score
         current_time = time.time()
         seconds = int(current_time - start_time)
         if int(current_time - start_time) > 20:
@@ -439,18 +494,27 @@ def main(stdscr):
         player_dead, hit_snitch = print_matrix(stdscr, matrix, player)
         if hit_snitch:
             if time.time() - 0.5 > last_hit_snitch:
-                score += 1
+                score += round_num
+                if score >= high_score:
+                    high_score = score
                 total_score += 1
                 coins += 1
                 snitch.reset(stdscr)
                 last_hit_snitch = time.time()
 
         if player_dead:
+
+            cursor.execute('''
+                            UPDATE player_data 
+                            SET high_score = ?, character_level = ?
+                            WHERE player_name = ?''', (high_score, character_level, player_name))
+            conn.commit()
+            player.high_score = high_score
             print_death_screen(stdscr, matrix, player)
             game_state = GameState.PLAYER_DEAD
 
         # Display the elapsed time and score
-        stdscr.addstr(0, 0, f"  Score: {score}     Round: {round_num}        Progress: |" + seconds * "-" + (
+        stdscr.addstr(0, 0, f"  Coins: {coins}     Round: {round_num}     Score: {score}        Progress: |" + seconds * "-" + (
                     20 - seconds) * " " + '|')
 
         # Handle player movement
@@ -508,7 +572,7 @@ def main(stdscr):
         time.sleep(refresh_rate / round_num)
 
     def player_dead_update():
-        nonlocal player_dead, score, start_screen, game_playing, store_screen, round_num, game_state, coins
+        nonlocal player_dead, score, start_screen, game_playing, store_screen, round_num, game_state, coins, start_time
         stdscr.clear()
 
         # Overlay the "Game Over" message
@@ -533,6 +597,7 @@ def main(stdscr):
             player.radius_level = 1
             player.cooldown_level = 1
             round_num = 1
+            start_time = time.time()
 
         time.sleep(0.05)
 
@@ -553,6 +618,7 @@ def main(stdscr):
             watch_rate /= 2
 
     def reset_game():
+        nonlocal score
         SIZE = stdscr.getmaxyx()  # Fixed grid size for now, but you can adjust this if needed
         SIZE = (SIZE[0], SIZE[1] // 2)
         matrix = initlise_matrix(SIZE)
@@ -560,7 +626,7 @@ def main(stdscr):
         snitch = Snitch([10,10])
         snitch.reset(stdscr)
         matrix[snitch.position[0], snitch.position[1]] = 2
-        return SIZE, matrix, snitch, 0
+        return SIZE, matrix, snitch
 
     def reset_store():
         return radius_selected, cooldown_selected
@@ -568,7 +634,7 @@ def main(stdscr):
 
     # Outer loop that allows resetting the game
     while True:
-        SIZE, matrix, snitch, score = reset_game()
+        SIZE, matrix, snitch = reset_game()
         start_time = time.time()  # Record the start time when the game begins
         last_hit_snitch = time.time()
         try:
@@ -589,6 +655,6 @@ def main(stdscr):
         except KeyboardInterrupt:
             return  # Handle Ctrl+C gracefully
 
-
+    conn.close()
 # Wrapper to run the curses-based main loop
 curses.wrapper(main)
