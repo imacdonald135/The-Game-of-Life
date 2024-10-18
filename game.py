@@ -72,7 +72,7 @@ def initlise_matrix(SIZE):
             matrix[i, j] = random.randint(0, 1)
     return matrix
 
-def print_matrix(stdscr, matrix, player):
+def print_matrix(stdscr, matrix, player, coins, score, round_num, seconds):
     """Prints the matrix to the screen with player position marked as 'X' in red."""
     # Start colors in curses# Example: green for other elements if needed
 
@@ -116,7 +116,9 @@ def print_matrix(stdscr, matrix, player):
         except curses.error:
             # Handle the error when trying to print outside the screen bounds
             break  # Exit the loop if we cannot print more rows
-
+    stdscr.addstr(0, 0,
+                  f"  Coins: {coins}     Round: {round_num}     Score: {score}        Progress: |" + seconds * "-" + (
+                          20 - seconds) * " " + '|')
     stdscr.refresh()  # Refresh the screen
     return died, hit_snitch
 
@@ -526,7 +528,7 @@ def main(stdscr):
             game_state = GameState.ROUND_END
             return
         # Print the game matrix with player position
-        player_dead, hit_snitch = print_matrix(stdscr, matrix, player)
+        player_dead, hit_snitch = print_matrix(stdscr, matrix, player, coins, score, round_num, seconds)
         if hit_snitch:
             if time.time() - 0.5 > last_hit_snitch:
                 score += round_num
@@ -547,14 +549,6 @@ def main(stdscr):
             player.high_score = high_score
             print_death_screen(stdscr, matrix, player)
             game_state = GameState.PLAYER_DEAD
-
-        if top_bar_ticks == 4:
-        # Display the elapsed time and score
-            stdscr.addstr(0, 0, f"  Coins: {coins}     Round: {round_num}     Score: {score}        Progress: |" + seconds * "-" + (
-                    20 - seconds) * " " + '|')
-            top_bar_ticks = 0
-        else:
-            top_bar_ticks += 1
 
         # Handle player movement
         player.move(stdscr, SIZE, bullets)
@@ -653,7 +647,7 @@ def main(stdscr):
         nonlocal matrix, player, SIZE, game_state, watch_rate
         player.avatar = " "
         matrix = next_iteration(matrix, SIZE, player, round_num)
-        print_matrix(stdscr, matrix, player)
+        print_matrix(stdscr, matrix, player, 0, 0, 0, 0)
         time.sleep(watch_rate)
 
         key = stdscr.getch()
