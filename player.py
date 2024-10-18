@@ -18,6 +18,8 @@ class Player:
         self.radius = 2
         self.cooldown_level = 1
         self.radius_level = 1
+        self.shotgun = False
+        self.burst = False
 
     def move(self, stdscr, SIZE, bullets):
         key = stdscr.getch()  # Get the pressed key (non-blocking)
@@ -43,6 +45,14 @@ class Player:
             self.avatar = RIGHT
             self.position[1] += 1
 
+        elif key == ord('p'):
+            self.shotgun = not self.shotgun
+            self.burst = False
+
+        elif key == ord('o'):
+            self.shotgun = False
+            self.burst = not self.burst
+
         # Handle jumping
         elif key == ord(' '):  # Jump functionality
             if self.direction == "up" and self.position[0] > 2:
@@ -59,22 +69,79 @@ class Player:
         # Handle firing bullets (with cooldown)
         if (time.time() - self.last_fired) > self.cooldown:
             if key == ord('w'):  # Fire upward
-                bullet = Bullet(self.position.copy(), "up", self.radius)
+                x = self.position.copy()[0]
+                y = self.position.copy()[1]
+                if self.shotgun:
+                    bullet = Bullet([x, y-1], "up", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x, y+1], "up", self.radius)
+                    bullets.append(bullet)
+
+                elif self.burst:
+                    bullet = Bullet([x - 3, y], "up", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x - 5, y], "up", self.radius)
+                    bullets.append(bullet)
+
+                bullet = Bullet([x - 1, y], "up", self.radius)
                 bullets.append(bullet)
                 self.last_fired = time.time()  # Reset cooldown timer
 
             elif key == ord('a'):  # Fire left
-                bullet = Bullet(self.position.copy(), "left", self.radius)
+                x = self.position.copy()[0]
+                y = self.position.copy()[1]
+                if self.shotgun:
+                    bullet = Bullet([x - 1, y], "left", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x+1, y], "left", self.radius)
+                    bullets.append(bullet)
+
+                elif self.burst:
+                    bullet = Bullet([x, y- 3], "left", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x, y - 5], "left", self.radius)
+                    bullets.append(bullet)
+
+                bullet = Bullet([x, y-1], "left", self.radius)
                 bullets.append(bullet)
                 self.last_fired = time.time()
 
             elif key == ord('d'):  # Fire right
-                bullet = Bullet(self.position.copy(), "right", self.radius)
+                x = self.position.copy()[0]
+                y = self.position.copy()[1]
+                if self.shotgun:
+                    bullet = Bullet([x-1, y], "right", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x + 1, y], "right", self.radius)
+                    bullets.append(bullet)
+
+                elif self.burst:
+
+                    bullet = Bullet([x, y+3], "right", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x, y+5], "right", self.radius)
+                    bullets.append(bullet)
+
+                bullet = Bullet([x, y+1], "right", self.radius)
                 bullets.append(bullet)
                 self.last_fired = time.time()
 
-            elif key == ord('s'):  # Fire downward
-                bullet = Bullet(self.position.copy(), "down", self.radius)
+            elif key == ord('s'):
+                x = self.position.copy()[0]
+                y = self.position.copy()[1]
+                if self.shotgun:
+                    bullet = Bullet([x, y - 1], "down", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x, y + 1], "down", self.radius)
+                    bullets.append(bullet)
+
+                if self.burst:
+                    bullet = Bullet([x + 5, y], "down", self.radius)
+                    bullets.append(bullet)
+                    bullet = Bullet([x + 3, y], "down", self.radius)
+                    bullets.append(bullet)
+
+                bullet = Bullet([x+1, y], "down", self.radius)
                 bullets.append(bullet)
                 self.last_fired = time.time()
 
@@ -84,6 +151,7 @@ class Player:
 
         if key == ord("b"):
             return Bullet(self.position, self.direction)
+
         return None
 
     def decrease_cooldown(self):

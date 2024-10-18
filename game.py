@@ -10,12 +10,17 @@ from bullet import Bullet
 from player import Player
 from snitch import Snitch
 
+MATRIX_ITERATION_TICKS = 0
+EGG_PLACED = False
+EGG_COORDS = None
+
 class GameState(Enum):
     START_SCREEN = 1
     STORE_SCREEN = 2
     GAME_PLAYING = 3
     PLAYER_DEAD = 4
     JUST_WATCHING = 5
+    ROUND_END = 6
 
 def initialize_colors():
     """Initialize custom colors and color pairs."""
@@ -23,10 +28,14 @@ def initialize_colors():
 
     # Custom colors
     curses.init_color(10, 800, 50, 50)
-    curses.init_color(11, 500, 100, 100)
+    curses.init_color(11, 1000, 333, 333)
     curses.init_color(12, 800, 800, 100)
     curses.init_color(13, 800, 400, 100)
     curses.init_color(14, 600, 200, 50)
+    curses.init_color(15, 1000, 1000, 200)
+    curses.init_color(16, 1000, 500, 100)
+    curses.init_color(17, 1000, 100, 50)
+
 
 
     # Define color pairs
@@ -36,6 +45,9 @@ def initialize_colors():
     curses.init_pair(4, 12, curses.COLOR_BLACK)  # Custom bright blue
     curses.init_pair(5, 13, curses.COLOR_BLACK)  # Custom bright blue
     curses.init_pair(6, 14, curses.COLOR_BLACK)  # Custom bright blue
+    curses.init_pair(7, 15, curses.COLOR_BLACK)  # Custom bright blue
+    curses.init_pair(8, 16, curses.COLOR_BLACK)  # Custom bright blue
+    curses.init_pair(9, 17, curses.COLOR_BLACK)  # Custom bright blue
 
 
 def initlise_matrix(SIZE):
@@ -74,6 +86,9 @@ def print_matrix(stdscr, matrix, player):
                     ("O", curses.A_NORMAL) if elem == 4 else
                     (" ", curses.A_NORMAL) if elem == 5 else
                     ("O", curses.A_NORMAL) if elem == 6 else
+                    ("3", curses.color_pair(7)) if elem == 7 else
+                    ("2", curses.color_pair(8)) if elem == 8 else
+                    ("1", curses.color_pair(9)) if elem == 9 else
                     (" ", curses.A_NORMAL)
                 )
                 if matrix[i][j] == 4:
@@ -98,7 +113,6 @@ def print_matrix(stdscr, matrix, player):
 
 def print_death_screen(stdscr, matrix, player):
     """ Flash the player icon to show the death """
-
 
     for n in range(6):
         for i, row in enumerate(matrix):
@@ -132,7 +146,7 @@ def print_death_screen(stdscr, matrix, player):
 def next_iteration(matrix, SIZE, player):
     """Computes the next state of the matrix based on the rules of Conway's Game of Life."""
     next_matrix = np.zeros(SIZE)
-
+    global MATRIX_ITERATION_TICKS, EGG_COORDS, EGG_PLACED
     for i in range(SIZE[0]):
         for j in range(SIZE[1]):
             alive_neighbours = 0
@@ -147,32 +161,66 @@ def next_iteration(matrix, SIZE, player):
             else:
                 next_matrix[i, j] = 0
 
-    if 1 == random.randint(0, 5):
-        px, py = player.position[0], player.position[1]
-        min_distance = 10  # Minimum distance from the player
+    if not EGG_PLACED:
+        if 1 == random.randint(0, 5):
+            px, py = player.position[0], player.position[1]
+            min_distance = 10  # Minimum distance from the player
 
-        valid_position = False
+            valid_position = False
+            block_center_x = None
+            block_center_y = None
 
-        while not valid_position:
-            # Random x and y for the top-left corner of the 10x10 block
-            x = random.randint(2, SIZE[0] - 12)
-            y = random.randint(2, SIZE[1] - 12)
+            while not valid_position:
+                # Random x and y for the top-left corner of the 10x10 block
+                x = random.randint(2, SIZE[0] - 12)
+                y = random.randint(2, SIZE[1] - 12)
 
-            # Calculate the center of the 10x10 block
-            block_center_x = x + 5
-            block_center_y = y + 5
+                # Calculate the center of the 10x10 block
+                block_center_x = x + 5
+                block_center_y = y + 5
 
-            # Compute the distance from the player to the block center
-            distance = math.sqrt((block_center_x - px) ** 2 + (block_center_y - py) ** 2)
+                # Compute the distance from the player to the block center
+                distance = math.sqrt((block_center_x - px) ** 2 + (block_center_y - py) ** 2)
 
-            # Check if the distance is greater than or equal to the minimum distance
-            if distance >= min_distance:
-                valid_position = True
+                # Check if the distance is greater than or equal to the minimum distance
+                if distance >= min_distance:
+                    valid_position = True
 
+            EGG_COORDS = [block_center_x, block_center_y]
+            next_matrix[EGG_COORDS[0], EGG_COORDS[1]] = 7
+            EGG_PLACED = True
+    else:
+        MATRIX_ITERATION_TICKS += 1
+        next_matrix[EGG_COORDS[0], EGG_COORDS[1]] = 7 + MATRIX_ITERATION_TICKS//5
         # Create the 10x10 random block at the valid position
-        for i in range(x, min(x + 10, SIZE[0])):
-            for j in range(y, min(y + 10, SIZE[1])):
-                next_matrix[i, j] = random.randint(0, 1)
+    if MATRIX_ITERATION_TICKS >= 15:
+
+        # for i in range(max(EGG_COORDS[0] -5, 0), min(EGG_COORDS[0] + 6, SIZE[0])):
+        #     for j in range(max(0, EGG_COORDS[1] - 5), min(EGG_COORDS[1]+6, SIZE[1])):
+        #         next_matrix[i, j] = random.randint(0, 1)
+        x = EGG_COORDS[0]
+        y = EGG_COORDS[1]
+
+        if 1 == random.randint(0, 1):
+            next_matrix[x - 1][y - 2] = 1
+            next_matrix[x][y] = 1
+            next_matrix[x + 1][y - 3] = 1
+            next_matrix[x + 1][y - 2] = 1
+            next_matrix[x + 1][y + 1] = 1
+            next_matrix[x + 1][y + 2] = 1
+            next_matrix[x + 1][y + 3] = 1
+        else:
+            next_matrix[x - 1][y] = 1
+            next_matrix[x - 1][y + 1] = 1
+            next_matrix[x][y - 1] = 1
+            next_matrix[x][y] = 1
+            next_matrix[x+1][y] = 1
+
+
+
+        MATRIX_ITERATION_TICKS = 0
+        EGG_COORDS = None
+        EGG_PLACED = False
 
     return next_matrix
 
@@ -211,7 +259,7 @@ def main(stdscr):
     watch_rate = 0.01
 
     def start_screen_update():
-        nonlocal start_screen, game_playing, game_mode, refresh_rate, store_screen, round_num, radius_selected, cooldown_selected, game_state  # Declare as nonlocal
+        nonlocal start_screen, game_playing, game_mode, refresh_rate, store_screen, round_num, radius_selected, cooldown_selected, game_state, coins  # Declare as nonlocal
         stdscr.clear()
         # Overlay the "Game Over" message
         stdscr.addstr(SIZE[0] // 2 - 3, SIZE[1] // 2 - 5, "Welcome to THE GAME OF LIFE (conway edition)!")
@@ -219,6 +267,10 @@ def main(stdscr):
         stdscr.addstr(SIZE[0] // 2 + 1, SIZE[1] // 2 - 5, "Press 's' to go to store / character setup")
         stdscr.addstr(SIZE[0] // 2 + 3, SIZE[1] // 2 - 5, f"You have selected game mode: {game_mode}")
         stdscr.addstr(SIZE[0] // 2 + 5, SIZE[1] // 2 - 5, f"Press ENTER to start !")
+
+        coins = 0
+        player.radius_level = 1
+        player.cooldown_level = 1
         # Wait for the player's input
         key = stdscr.getch()
 
@@ -307,22 +359,89 @@ def main(stdscr):
         time.sleep(0.01)
         stdscr.refresh()
 
+    def round_end_update():
+        nonlocal start_screen, store_screen, radius_selected, cooldown_selected, coins, game_state, round_num, start_time
+        stdscr.clear()
+        # Overlay the "Game Over" message and store options
+        stdscr.addstr(SIZE[0] // 2 - 10, SIZE[1] // 3, f"Congratulations, you beat round {round_num}!")
+        stdscr.addstr(SIZE[0] // 2 - 10, int(SIZE[1] + SIZE[1] // 2), f"Coins: {coins}")
+
+        # Display the selection pointer
+        if radius_selected:
+            stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, "|")
+        else:
+            stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2) - 2, " ")
+
+        if cooldown_selected:
+            stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, "|")
+        else:
+            stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2) - 2, " ")
+
+        stdscr.addstr(SIZE[0] // 2 - 1, int(SIZE[1] / 2), f"Radius level: {player.radius_level}")
+        stdscr.addstr(SIZE[0] // 2 + 1, int(SIZE[1] / 2), f"Cooldown level: {player.cooldown_level}")
+
+        stdscr.addstr(SIZE[0] // 2 + 10, SIZE[1] // 3, f"Press 'c' to proceed to round {round_num + 1}")
+
+        # Wait for the player's input
+        key = stdscr.getch()
+
+        # Handle input for toggling between options
+        if key == curses.KEY_UP:
+            radius_selected = True
+            cooldown_selected = False
+
+        elif key == curses.KEY_DOWN:
+            radius_selected = False
+            cooldown_selected = True
+
+        elif key == curses.KEY_RIGHT:
+            if coins > 0:
+                if radius_selected:
+                    player.increase_radius()
+                else:
+                    player.decrease_cooldown()
+                coins -= 1
+
+        elif key == curses.KEY_LEFT:
+
+            if radius_selected:
+                level_before = player.radius_level
+                player.decrease_radius()
+                level_after = player.radius_level
+                if level_before != level_after:
+                    coins += 1
+            else:
+                level_before = player.cooldown_level
+                player.increase_cooldown()
+                level_after = player.cooldown_level
+                if level_before != level_after:
+                    coins += 1
+
+        elif key == ord("p"):
+            coins += 10
+
+        # Press 'r' to return to the start screen
+        if key == ord("c"):
+            round_num += 1
+            game_state = GameState.GAME_PLAYING
+            start_time = time.time()
+        time.sleep(0.01)
+        stdscr.refresh()
+
     def game_playing_update():
         nonlocal start_time, round_num, score, total_score, coins, matrix, snitch, last_hit_snitch, bullets, count, player_dead, game_playing, game_state
         current_time = time.time()
         seconds = int(current_time - start_time)
-        if int(current_time - start_time) > 10:
-            seconds = 0
-            round_num += 1
-            start_time = current_time
+        if int(current_time - start_time) > 20:
+            time.sleep(0.5)
+            game_state = GameState.ROUND_END
         # Print the game matrix with player position
         player_dead, hit_snitch = print_matrix(stdscr, matrix, player)
         if hit_snitch:
             if time.time() - 0.5 > last_hit_snitch:
                 score += 1
                 total_score += 1
-                if total_score % 5 == 0:
-                    coins += 1
+                coins += 1
                 snitch.reset(stdscr)
                 last_hit_snitch = time.time()
 
@@ -332,7 +451,7 @@ def main(stdscr):
 
         # Display the elapsed time and score
         stdscr.addstr(0, 0, f"  Score: {score}     Round: {round_num}        Progress: |" + seconds * "-" + (
-                    10 - seconds) * " " + '|')
+                    20 - seconds) * " " + '|')
 
         # Handle player movement
         player.move(stdscr, SIZE, bullets)
@@ -389,7 +508,7 @@ def main(stdscr):
         time.sleep(refresh_rate / round_num)
 
     def player_dead_update():
-        nonlocal player_dead, score, start_screen, game_playing, store_screen, round_num, game_state
+        nonlocal player_dead, score, start_screen, game_playing, store_screen, round_num, game_state, coins
         stdscr.clear()
 
         # Overlay the "Game Over" message
@@ -410,6 +529,9 @@ def main(stdscr):
         elif key == ord('r'):
             # Reset the game
             game_state = GameState.GAME_PLAYING
+            coins = 0
+            player.radius_level = 1
+            player.cooldown_level = 1
             round_num = 1
 
         time.sleep(0.05)
@@ -456,6 +578,8 @@ def main(stdscr):
                 store_screen_update()
             while game_state == GameState.GAME_PLAYING:
                 game_playing_update()
+            while game_state == GameState.ROUND_END:
+                round_end_update()
             while game_state == GameState.JUST_WATCHING:
                 just_watching_update()
             while game_state == GameState.PLAYER_DEAD:
