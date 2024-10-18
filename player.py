@@ -3,16 +3,22 @@ import time
 
 from bullet import Bullet
 
-UP = '▲'
-DOWN = '▼'
-LEFT = '◀'
-RIGHT = '▶'
+AVATAR_1 = 'ↂ'
+AVATAR_2 = '∰'
+AVATAR_3 = 'π'
+AVATAR_4 = '⊛'
+AVATAR_5 = '⨂'
+AVATAR_6 = '▦'
+AVATAR_7 = '⧈'
+AVATAR_8 = '⟁'
+AVATAR_9 = 'Ω'
+
 
 class Player:
     def __init__(self, position, direction, high_score, level):
         self.position = position
         self.direction = direction
-        self.avatar = " "
+        self.avatar = AVATAR_9
         self.last_fired = time.time()
         self.cooldown = 0.5
         self.radius = 2
@@ -22,6 +28,7 @@ class Player:
         self.burst = False
         self.highscore = high_score
         self.level = level
+        self.hidden = " "
 
     def move(self, stdscr, SIZE, bullets):
         key = stdscr.getch()  # Get the pressed key (non-blocking)
@@ -30,21 +37,17 @@ class Player:
         # Handle movement
         if key == curses.KEY_UP and self.position[0] > 0:
             self.direction = "up"
-            self.avatar = UP
             self.position[0] -= 1
         elif key == curses.KEY_DOWN and self.position[0] < SIZE[0] - 1 and self.position[0] < max_x - 1:
             self.direction = "down"
-            self.avatar = DOWN
             self.position[0] += 1
         elif key == curses.KEY_LEFT and self.position[1] > 0:
             self.direction = "left"
-            self.avatar = LEFT
             self.position[1] -= 1
         elif key == curses.KEY_RIGHT and self.position[1] < SIZE[1] - 1 and (
                 (self.position[1] < max_y // 2 and max_y % 2 == 1) or (
                 self.position[1] < max_y // 2 + 1) and max_y % 2 == 0):
             self.direction = "right"
-            self.avatar = RIGHT
             self.position[1] += 1
 
         elif key == ord('p'):
@@ -174,3 +177,8 @@ class Player:
         if self.radius_level > 1:
             self.radius = self.radius - 2
             self.radius_level -= 1
+
+    def toggle_hide(self):
+        temp = self.hidden
+        self.hidden = self.avatar
+        self.avatar = temp
